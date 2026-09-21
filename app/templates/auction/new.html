@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}New auction — LiveBid{% endblock %}
+{% block content %}
+<section class="fade-up max-w-md">
+  <h1 class="font-serif text-3xl tracking-tight">Create auction</h1>
+  <form method="post" class="mt-6 space-y-5">
+    <div>
+      <label for="title" class="block text-sm font-medium mb-1.5">Title</label>
+      <input id="title" name="title" required
+             class="w-full h-10 px-3 rounded-md border border-line bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ink/20">
+    </div>
+    <div>
+      <label for="description" class="block text-sm font-medium mb-1.5">Description</label>
+      <input id="description" name="description"
+             class="w-full h-10 px-3 rounded-md border border-line bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ink/20">
+    </div>
+    <div class="grid grid-cols-2 gap-4">
+      <div>
+        <label for="starting_bid" class="block text-sm font-medium mb-1.5">Starting bid</label>
+        <input id="starting_bid" name="starting_bid" type="number" value="1000" min="1"
+               class="w-full h-10 px-3 rounded-md border border-line bg-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ink/20">
+      </div>
+      <div>
+        <label for="minimum_increment" class="block text-sm font-medium mb-1.5">Min increment</label>
+        <input id="minimum_increment" name="minimum_increment" type="number" value="100" min="1"
+               class="w-full h-10 px-3 rounded-md border border-line bg-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ink/20">
+      </div>
+    </div>
+    <div>
+      <label for="duration_seconds" class="block text-sm font-medium mb-1.5">Duration (seconds)</label>
+      <input id="duration_seconds" name="duration_seconds" type="number" value="600" min="10"
+             class="w-full h-10 px-3 rounded-md border border-line bg-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ink/20">
+    </div>
+    <button type="submit"
+            class="inline-flex items-center rounded-md bg-ink text-white text-sm font-medium px-4 h-10 hover:bg-[#333333] active:scale-[0.98] transition">
+      Start auction
+    </button>
+  </form>
+</section>
+{% endblock %}

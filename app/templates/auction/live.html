@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}{{ state.title }} — LiveBid{% endblock %}
+{% block header_status %}
+<div class="flex items-center gap-2 text-xs font-mono">
+  <span id="conn-dot" class="w-2 h-2 rounded-full bg-pastelred-text/60 inline-block"></span>
+  <span id="conn-label" class="text-mute uppercase tracking-widest">connecting</span>
+</div>
+{% endblock %}
+{% block content %}
+<div id="bootstrap" data-auction-id="{{ state.id }}" data-seq="{{ state.sequence }}"></div>
+<section class="fade-up max-w-3xl">
+  <h1 class="font-serif text-3xl md:text-4xl tracking-tight leading-tight">{{ state.title }}</h1>
+  {% if state.description %}<p class="mt-2 text-mute">{{ state.description }}</p>{% endif %}
+
+  <div class="mt-10 text-center py-10 border-y border-line">
+    <div class="text-xs uppercase tracking-widest text-mute font-mono">Current bid</div>
+    <div id="current-bid" class="font-serif text-6xl md:text-7xl tracking-tight mt-3 tabular-nums">
+      {{ '{:,}'.format(state.current_bid) }}
+    </div>
+    <div id="min-bid" class="mt-2 text-sm text-mute font-mono">
+      Minimum valid bid: <span class="tabular-nums">{{ '{:,}'.format(state.minimum_valid_bid) }}</span>
+    </div>
+    <div id="status-line" class="mt-4">
+      <span id="auction-status" class="text-xs font-mono px-2 py-0.5 rounded-full tracking-widest uppercase
+        {% if state.status == 'LIVE' %}bg-pastelgreen-bg text-pastelgreen-text{% elif state.status == 'ENDED' %}bg-pastelyellow-bg text-pastelyellow-text{% else %}bg-line text-mute{% endif %}">
+        {{ state.status }}
+      </span>
+      <span class="ml-3 text-sm text-mute font-mono" id="ends-in"
+            data-ends-at="{{ state.ends_at }}">{{ state.status == 'LIVE' and 'ends in —' or '' }}</span>
+    </div>
+    <div id="winner-box" class="hidden mt-4 text-sm font-mono text-pastelgreen-text"></div>
+  </div>
+
+  <form id="bid-form" class="mt-6 flex gap-3 max-w-md">
+    <label for="amount" class="sr-only">Your bid</label>
+    <input id="amount" name="amount" type="number" min="1" inputmode="numeric" autocomplete="off"
+           value="{{ state.minimum_valid_bid }}" required
+           class="flex-1 h-10 px-3 rounded-md border border-line bg-white text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ink/20">
+    <button type="submit"
+            class="inline-flex items-center rounded-md bg-ink text-white text-sm font-medium px-4 h-10 hover:bg-[#333333] active:scale-[0.98] transition disabled:opacity-40">
+      Place bid
+    </button>
+  </form>
+  <div id="toast" aria-live="polite" class="mt-3 text-sm min-h-5 font-mono"></div>
+</section>
+
+<section class="fade-up mt-10">
+  <h2 class="text-xs uppercase tracking-widest text-mute font-mono mb-3">Bid history</h2>
+  <ul id="bid-history" class="border-t border-line divide-y divide-line">
+    {% for bid in state.bids | selectattr('accepted') | list %}
+    <li class="flex items-center justify-between py-2.5 text-sm">
+      <span class="font-mono tabular-nums">{{ '{:,}'.format(bid.amount) }}</span>
+      <span class="text-mute">{{ bid.bidder }}</span>
+      <span class="text-mute font-mono text-xs">{{ bid.created_at[11:19] }}</span>
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+
+<script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+<script src="{{ url_for('static', filename='js/auction.js') }}"></script>
+{% endblock %}

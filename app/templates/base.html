@@ -1,0 +1,52 @@
+<!-- ponytail: Tailwind Play CDN is fine for the single-page MVP; swap to the
+     Tailwind CLI build into app/static/css when the UI stabilizes. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}LiveBid{% endblock %}</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            bone: "#F7F6F3",
+            ink: "#111111",
+            mute: "#787774",
+            line: "#EAEAEA",
+            pastelred: { bg: "#FDEBEC", text: "#9F2F2D" },
+            pastelgreen: { bg: "#EDF3EC", text: "#346538" },
+            pastelblue: { bg: "#E1F3FE", text: "#1F6C9F" },
+            pastelyellow: { bg: "#FBF3DB", text: "#956400" },
+          },
+          fontFamily: {
+            sans: ["SF Pro Display", "Geist Sans", "Helvetica Neue", "Switzer", "system-ui", "sans-serif"],
+            serif: ["Newsreader", "Instrument Serif", "Georgia", "serif"],
+            mono: ["Geist Mono", "SF Mono", "JetBrains Mono", "ui-monospace", "monospace"],
+          },
+        },
+      },
+    };
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    @keyframes fade-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    .fade-up { animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
+    @media (prefers-reduced-motion: reduce) { .fade-up { animation: none; } }
+  </style>
+</head>
+<body class="bg-bone text-ink font-sans antialiased min-h-screen">
+  <header class="border-b border-line">
+    <div class="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+      <a href="/" class="font-serif text-lg tracking-tight">LiveBid</a>
+      {% block header_status %}{% endblock %}
+    </div>
+  </header>
+  <main class="max-w-5xl mx-auto px-6 py-10">
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
