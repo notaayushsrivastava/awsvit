@@ -10,3 +10,13 @@ class Config:
         "postgresql+psycopg://livebid:livebid@localhost:5432/livebid",
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+
+
+class TestConfig(Config):
+    """Tests truncate tables, so they must never point at the dev database."""
+
+    TESTING = True
+    SQLALCHEMY_DATABASE_URI = os.environ.get(
+        "TEST_DATABASE_URL",
+        "postgresql+psycopg://livebid:livebid@localhost:5432/livebid_test",
+    )

@@ -143,3 +143,25 @@ class AuctionEvent(db.Model):
     created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
 
     __table_args__ = (db.UniqueConstraint("auction_id", "sequence"),)
+
+
+class ChatMessage(db.Model):
+    __tablename__ = "chat_messages"
+
+    id = db.Column(db.Uuid, primary_key=True, default=uuid.uuid4)
+    auction_id = db.Column(
+        db.Uuid, db.ForeignKey("auctions.id"), nullable=False, index=True
+    )
+    bidder_id = db.Column(db.Uuid, db.ForeignKey("bidders.id"), nullable=False)
+    body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True), nullable=False, default=utcnow)
+
+    bidder = db.relationship("Bidder")
+
+    def to_dict(self):
+        return {
+            "id": str(self.id),
+            "bidder": self.bidder.display_name,
+            "body": self.body,
+            "created_at": self.created_at.isoformat(),
+        }

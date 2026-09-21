@@ -58,6 +58,7 @@ def _close_due():
                 if auction.highest_bidder
                 else None,
                 "winning_bid": auction.current_bid,
+                "leaderboard": svc.get_leaderboard(auction.id),
             },
             to=f"auction:{auction.id}",
         )

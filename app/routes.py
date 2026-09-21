@@ -34,23 +34,9 @@ def http_bid(auction_id):
             "minimum_valid_bid": e.minimum_valid_bid,
         }), 409
     # committed — now broadcast to socket clients in the room
-    from app.extensions import socketio
-    from app.services.auction_service import get_state
+    from app.sockets import broadcast_bid
 
-    socketio.emit(
-        "bid_accepted",
-        {
-            "event": "bid_accepted",
-            "request_id": bid.request_id,
-            "auction_id": str(auction_id),
-            "bid_amount": bid.amount,
-            "current_bid": bid.amount,
-            "bidder": bid.bidder.display_name,
-            "minimum_valid_bid": bid.amount + svc._get_min_increment(auction_id),
-            "sequence": get_state(auction_id, include_bids=False)["sequence"],
-        },
-        to=f"auction:{auction_id}",
-    )
+    broadcast_bid(auction_id, bid)
     return jsonify({"accepted": True, "amount": bid.amount})
 
 
@@ -64,6 +50,13 @@ def results(auction_id):
     return render_template("auction/results.html", state=state, history=history)
 
 
+def broadcast_bid(auction_id, bid):
+    """Broadcast a committed bid. Call only after the transaction commits."""
+    from app.sockets import broadcast_bid as _broadcast
+
+    _broadcast(auction_id, bid)
+
+
 @bp.get("/health")
 def health():
     db.session.execute(db.text("SELECT 1"))
@@ -72,7 +65,7 @@ def health():
 
 @bp.get("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", auctions=svc.list_live_auctions())
 
 
 @bp.route("/auction/new", methods=["GET", "POST"])
@@ -97,7 +90,12 @@ def auction_page(auction_id):
         return render_template("auction/missing.html", auction_id=auction_id), 404
     bidder = current_bidder()
     joined = bidder is not None and svc.is_participant(auction_id, bidder.id)
-    return render_template("auction/live.html", state=state, joined=joined)
+    return render_template(
+        "auction/live.html",
+        state=state,
+        joined=joined,
+        me=bidder.display_name if bidder else None,
+    )
 
 
 @bp.post("/auction/<auction_id>/join")

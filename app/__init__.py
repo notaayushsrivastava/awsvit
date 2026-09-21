@@ -11,11 +11,9 @@ load_dotenv()
 def create_app(config_name="default"):
     app = Flask(__name__)
 
-    from config import Config
+    from config import Config, TestConfig
 
-    app.config.from_object(Config)
-    if os.environ.get("TESTING") == "1":
-        app.config.update(TESTING=True)
+    app.config.from_object(TestConfig if config_name == "testing" else Config)
 
     db.init_app(app)
     migrate.init_app(app, db)

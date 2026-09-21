@@ -7,20 +7,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="LiveBid — real-time auctions with transactional bidding and live WebSocket updates.">
   <title>{% block title %}LiveBid{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23EDEBE6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m15 12-8.5 8.5a2.12 2.12 0 1 1-3-3L12 9'/%3E%3Cpath d='M17.64 15 22 10.64'/%3E%3Cpath d='m20.91 11.7-1.25-1.25c-.6-.6-.93-1.4-.93-2.25v-.86L16.01 4.6a5.56 5.56 0 0 0-3.94-1.64H9l.92.82A6.18 6.18 0 0 1 12 8.4v1.56l2 2h2.47l2.26 1.91'/%3E%3C/svg%3E">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
+    // Dark mode is the only mode. The token names (bone/ink/...) are kept so
+    // existing templates keep working; their values are the dark theme.
     tailwind.config = {
       theme: {
         extend: {
           colors: {
-            bone: "#F7F6F3",
-            ink: "#111111",
-            mute: "#666666",
-            line: "#EAEAEA",
-            pastelred: { bg: "#FDEBEC", text: "#9F2F2D" },
-            pastelgreen: { bg: "#EDF3EC", text: "#346538" },
-            pastelblue: { bg: "#E1F3FE", text: "#1F6C9F" },
-            pastelyellow: { bg: "#FBF3DB", text: "#956400" },
+            bone: "#101010",            // page canvas
+            ink: "#EDEBE6",             // primary text (also = button surface)
+            mute: "#9C9C97",            // secondary text
+            line: "#2A2A28",            // hairline borders
+            white: "#181816",           // card / input surface
+            pastelred: { bg: "#2E1B1C", text: "#D98A8A" },
+            pastelgreen: { bg: "#1B2A1C", text: "#7FBF84" },
+            pastelblue: { bg: "#16242E", text: "#6FB1D8" },
+            pastelyellow: { bg: "#2B2415", text: "#D4A93F" },
           },
           fontFamily: {
             sans: ["SF Pro Display", "Geist Sans", "Helvetica Neue", "Switzer", "system-ui", "sans-serif"],
@@ -37,17 +41,96 @@
     @keyframes fade-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
     .fade-up { animation: fade-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) both; }
     @media (prefers-reduced-motion: reduce) { .fade-up { animation: none; } }
+
+    /* flashbang trap: white flash -> full-screen image -> fade back to dark */
+    #flashbang { transition: opacity 0.9s ease; }
+    #flashbang.bang { opacity: 1; }
+    #flashbang.fade { opacity: 0; }
+    #flashbang .bang-white { opacity: 1; transition: opacity 0.45s ease; }
+    #flashbang.show-img .bang-white { opacity: 0; }
+    #flashbang .bang-img {
+      opacity: 0; transform: scale(1.06);
+      transition: opacity 0.4s ease, transform 1.8s cubic-bezier(0.16, 1, 0.3, 1);
+      object-fit: cover; width: 100%; height: 100%;
+    }
+    #flashbang.show-img .bang-img { opacity: 1; transform: scale(1); }
   </style>
 </head>
 <body class="bg-bone text-ink font-sans antialiased min-h-screen">
-  <header class="border-b border-line">
-    <div class="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
-      <a href="/" class="font-serif text-lg tracking-tight">LiveBid</a>
-      {% block header_status %}{% endblock %}
+  <header class="border-b border-line sticky top-0 bg-bone/95 backdrop-blur z-30">
+    <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between gap-4">
+      <a href="/" class="flex items-center gap-2 group">
+        <!-- lucide "hammer" -->
+        <svg id="brand-mark" class="w-5 h-5 text-ink" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m15 12-8.5 8.5a2.12 2.12 0 1 1-3-3L12 9"></path>
+          <path d="M17.64 15 22 10.64"></path>
+          <path d="m20.91 11.7-1.25-1.25c-.6-.6-.93-1.4-.93-2.25v-.86L16.01 4.6a5.56 5.56 0 0 0-3.94-1.64H9l.92.82A6.18 6.18 0 0 1 12 8.4v1.56l2 2h2.47l2.26 1.91"></path>
+        </svg>
+        <span class="font-serif text-lg tracking-tight">LiveBid</span>
+      </a>
+      <div class="flex items-center gap-4">
+        {% block header_status %}{% endblock %}
+        {% block header_actions %}{% endblock %}
+        <!-- There is no light mode. There is only the bang. -->
+        <button id="lightmode-btn" type="button"
+                class="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-line text-sm text-mute hover:text-ink hover:bg-white transition"
+                title="Light mode">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+               stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2"></path><path d="M12 20v2"></path>
+            <path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path>
+            <path d="M2 12h2"></path><path d="M20 12h2"></path>
+            <path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path>
+          </svg>
+          <span class="hidden sm:inline">Light mode</span>
+        </button>
+      </div>
     </div>
   </header>
-  <main class="max-w-5xl mx-auto px-6 py-10">
+  <main class="max-w-6xl mx-auto px-6 py-10">
     {% block content %}{% endblock %}
   </main>
+
+  <div id="flashbang" class="hidden fixed inset-0 z-[100]" aria-hidden="true">
+    <div class="bang-white absolute inset-0 bg-[#FFFFFF]"></div>
+    <img class="bang-img absolute inset-0" src="{{ url_for('static', filename='flashbang.jpg') }}" alt="">
+  </div>
+
+  <script>
+    (() => {
+      const btn = document.getElementById("lightmode-btn");
+      const overlay = document.getElementById("flashbang");
+      const audio = new Audio("{{ url_for('static', filename='flashbang.mp3') }}");
+      audio.preload = "auto";
+      window.__bangAudio = audio; // debug hook
+      let banging = false;
+
+      function endBang() {
+        overlay.classList.add("fade");
+        setTimeout(() => {
+          overlay.classList.add("hidden");
+          overlay.classList.remove("bang", "show-img", "fade");
+          banging = false;
+        }, 950);
+      }
+
+      btn.addEventListener("click", () => {
+        if (banging) return;
+        banging = true;
+        // 1. the bang: pure white, everything behind it is gone
+        overlay.classList.remove("hidden", "fade", "show-img");
+        overlay.classList.add("bang");
+        // 2. the reveal
+        setTimeout(() => overlay.classList.add("show-img"), 550);
+        // 3. audio runs the show; end when it ends (fallback timer just in case)
+        audio.currentTime = 0;
+        audio.play().catch(() => {});
+        audio.onended = endBang;
+        setTimeout(() => { if (banging && !overlay.classList.contains("fade")) endBang(); }, 8000);
+      });
+    })();
+  </script>
 </body>
 </html>

@@ -102,6 +102,8 @@ def get_state(auction_id, include_bids=True):
     )
     data = auction.to_dict(include_bids=include_bids)
     data["sequence"] = seq
+    data["leaderboard"] = get_leaderboard(auction_id)
+    data["chat"] = get_chat(auction_id)
     data["participants"] = (
         db.session.scalar(
             select(func.count()).select_from(AuctionParticipant).where(
@@ -198,6 +200,96 @@ def place_bid(auction_id, bidder_id, amount, request_id=None):
     except RejectedBid:
         _record_rejection(auction_id, bidder_id, amount, request_id)
         raise
+
+
+def get_leaderboard(auction_id, limit=10):
+    """Every joined participant, ranked. Bidders by highest accepted bid
+    (ties: earliest first bid wins); participants who have not bid yet sort
+    last and carry top_bid=None so the UI can grey them out."""
+    from sqlalchemy import desc, nulls_last
+
+    best = (
+        select(
+            Bid.bidder_id.label("bidder_id"),
+            func.max(Bid.amount).label("top_bid"),
+            func.count(Bid.id).label("bids"),
+            func.min(Bid.created_at).label("first_at"),
+        )
+        .where(Bid.auction_id == auction_id, Bid.accepted.is_(True))
+        .group_by(Bid.bidder_id)
+        .subquery()
+    )
+    rows = db.session.execute(
+        select(Bidder.display_name, best.c.top_bid, best.c.bids, best.c.first_at)
+        .select_from(AuctionParticipant)
+        .join(Bidder, Bidder.id == AuctionParticipant.bidder_id)
+        .outerjoin(best, best.c.bidder_id == Bidder.id)
+        .where(AuctionParticipant.auction_id == auction_id)
+        .order_by(nulls_last(desc(best.c.top_bid)), best.c.first_at.asc())
+        .limit(limit)
+    ).all()
+    return [
+        {
+            "rank": i + 1,
+            "bidder": r[0],
+            "top_bid": r[1],
+            "bids": r[2] or 0,
+        }
+        for i, r in enumerate(rows)
+    ]
+
+
+def list_live_auctions(limit=20):
+    """Auctions currently open for joining/bidding, ending soonest first."""
+    rows = db.session.scalars(
+        select(Auction)
+        .where(Auction.status == AuctionStatus.LIVE, Auction.ends_at > utcnow())
+        .order_by(Auction.ends_at.asc())
+        .limit(limit)
+    ).all()
+    out = []
+    for a in rows:
+        d = a.to_dict(include_bids=False)
+        d["participants"] = (
+            db.session.scalar(
+                select(func.count()).select_from(AuctionParticipant).where(
+                    AuctionParticipant.auction_id == a.id
+                )
+            )
+            or 0
+        )
+        out.append(d)
+    return out
+
+
+def post_chat(auction_id, bidder_id, body):
+    """Persist a chat message. Chat is social only — it never touches bids."""
+    from app.models import ChatMessage
+
+    body = (body or "").strip()
+    if not body:
+        raise ValueError("empty message")
+    if len(body) > 500:
+        raise ValueError("message too long")
+    if not is_participant(auction_id, bidder_id):
+        raise PermissionError("not a participant")
+    msg = ChatMessage(auction_id=auction_id, bidder_id=bidder_id, body=body)
+    db.session.add(msg)
+    db.session.commit()
+    return msg
+
+
+def get_chat(auction_id, limit=50):
+    """Latest messages, oldest-first so the template can render bottom-up."""
+    from app.models import ChatMessage
+
+    rows = db.session.scalars(
+        select(ChatMessage)
+        .where(ChatMessage.auction_id == auction_id)
+        .order_by(ChatMessage.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [m.to_dict() for m in reversed(rows)]
 
 
 def _min_increment(auction_id):

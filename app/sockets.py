@@ -31,25 +31,26 @@ def _min_increment(auction_id):
 
 @socketio.on("join_auction")
 def on_join_auction(data):
+    """Anyone with the link may watch; only participants may bid or chat
+    (enforced by the service + the bid/chat handlers)."""
     auction_id = data.get("auction_id")
     try:
         state = svc.get_state(auction_id)
     except LookupError:
         emit("server_error", {"error": "AUCTION_NOT_FOUND"})
         return
-    if not svc.is_participant(auction_id, _bidder_id()):
-        emit("server_error", {"error": "NOT_A_PARTICIPANT"})
-        return
-    # presence is informational only
-    db.session.execute(
-        AuctionParticipant.__table__.update()
-        .where(
-            AuctionParticipant.auction_id == auction_id,
-            AuctionParticipant.bidder_id == _bidder_id(),
+
+    if svc.is_participant(auction_id, _bidder_id()):
+        # presence is informational only
+        db.session.execute(
+            AuctionParticipant.__table__.update()
+            .where(
+                AuctionParticipant.auction_id == auction_id,
+                AuctionParticipant.bidder_id == _bidder_id(),
+            )
+            .values(last_seen_at=utcnow())
         )
-        .values(last_seen_at=utcnow())
-    )
-    db.session.commit()
+        db.session.commit()
 
     join_room(_room(auction_id))
     emit("auction_state", state)  # authoritative snapshot for this client
@@ -74,6 +75,31 @@ def on_leave_auction(data):
     leave_room(_room(data.get("auction_id")))
 
 
+def broadcast_bid(auction_id, bid):
+    """Broadcast a committed bid to the auction room. Only ever call this after
+    the transaction has committed. Uses the server-level emitter so it also
+    works from HTTP handlers (the socket-level emit() needs a socket context)."""
+    socketio.emit(
+        "bid_accepted",
+        {
+            "event": "bid_accepted",
+            "request_id": bid.request_id,
+            "auction_id": str(auction_id),
+            "bid_amount": bid.amount,
+            "current_bid": bid.amount,
+            "bidder": bid.bidder.display_name,
+            "minimum_valid_bid": bid.amount + _min_increment(auction_id),
+            "sequence": svc.get_state(auction_id, include_bids=False)["sequence"],
+        },
+        to=_room(auction_id),
+    )
+    socketio.emit(
+        "leaderboard_updated",
+        {"auction_id": str(auction_id), "leaderboard": svc.get_leaderboard(auction_id)},
+        to=_room(auction_id),
+    )
+
+
 @socketio.on("place_bid")
 def on_place_bid(data):
     auction_id = data.get("auction_id")
@@ -83,7 +109,7 @@ def on_place_bid(data):
     try:
         bid = svc.place_bid(auction_id, _bidder_id(), amount, request_id)
     except svc.RejectedBid as e:
-        payload = {
+        emit("bid_rejected", {
             "event": "bid_rejected",
             "request_id": request_id,
             "auction_id": str(auction_id),
@@ -91,19 +117,23 @@ def on_place_bid(data):
             "reason": e.reason,
             "current_bid": e.current_bid,
             "minimum_valid_bid": e.minimum_valid_bid,
-        }
-        emit("bid_rejected", payload)  # only to the submitting client
+        })  # only to the submitting client
         return
 
-    payload = {
-        "event": "bid_accepted",
-        "request_id": bid.request_id,
-        "auction_id": str(auction_id),
-        "bid_amount": bid.amount,
-        "current_bid": bid.amount,
-        "bidder": bid.bidder.display_name,
-        "minimum_valid_bid": bid.amount + _min_increment(auction_id),
-        "sequence": svc.get_state(auction_id, include_bids=False)["sequence"],
-    }
     # Committed before this point — safe to broadcast.
-    emit("bid_accepted", payload, to=_room(auction_id))
+    broadcast_bid(auction_id, bid)
+
+
+@socketio.on("send_chat")
+def on_send_chat(data):
+    auction_id = data.get("auction_id")
+    try:
+        msg = svc.post_chat(auction_id, _bidder_id(), data.get("body"))
+    except (ValueError, PermissionError) as e:
+        emit("server_error", {"error": "CHAT_REJECTED", "detail": str(e)})
+        return
+    emit(
+        "chat_message",
+        {"auction_id": str(auction_id), "message": msg.to_dict()},
+        to=_room(auction_id),
+    )

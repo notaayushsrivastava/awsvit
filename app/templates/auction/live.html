@@ -6,9 +6,25 @@
   <span id="conn-label" class="text-mute uppercase tracking-widest">connecting</span>
 </div>
 {% endblock %}
+{% block header_actions %}
+<button id="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false"
+        class="lg:hidden inline-flex items-center gap-1.5 h-9 px-3 rounded-md border border-line text-sm hover:bg-white transition">
+  <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M8 21h12a2 2 0 0 0 2-2v-2H10v2a2 2 0 1 1-4 0V5a2 2 0 1 0-4 0v3h4"></path>
+    <path d="M19 17V5a2 2 0 0 0-2-2H4"></path>
+  </svg>
+  <span class="font-mono tabular-nums" id="sidebar-count">{{ state.leaderboard | length }}</span>
+</button>
+{% endblock %}
 {% block content %}
-<div id="bootstrap" data-auction-id="{{ state.id }}" data-seq="{{ state.sequence }}"></div>
-<section class="fade-up max-w-3xl">
+<div id="bootstrap" data-auction-id="{{ state.id }}" data-seq="{{ state.sequence }}"
+     data-me="{{ me or '' }}" data-status="{{ state.status }}"
+     data-winner="{{ state.highest_bidder or '' }}" data-winning-bid="{{ state.current_bid }}"></div>
+
+<div class="grid lg:grid-cols-[minmax(0,1fr)_20rem] gap-10 items-start">
+  <div>
+    <section class="fade-up">
   <h1 class="font-serif text-3xl md:text-4xl tracking-tight leading-tight">{{ state.title }}</h1>
   {% if state.description %}<p class="mt-2 text-mute">{{ state.description }}</p>{% endif %}
 
@@ -71,7 +87,81 @@
     {% endfor %}
   </ul>
 </section>
+  </div>
+
+  <aside id="sidebar" aria-label="Leaderboard and chat"
+         class="hidden lg:block lg:sticky lg:top-20">
+    <div class="lg:static fixed inset-y-0 right-0 z-40 w-[19rem] max-w-[85vw] bg-bone border-l border-line lg:border-0
+                overflow-y-auto lg:overflow-visible p-5 lg:p-0">
+      <button id="sidebar-close" type="button"
+              class="lg:hidden mb-4 text-xs font-mono uppercase tracking-widest text-mute">Close</button>
+
+      <section aria-labelledby="leaderboard-heading"
+               class="rounded-xl border border-line bg-white p-5">
+        <h2 id="leaderboard-heading" class="text-xs uppercase tracking-widest text-mute font-mono mb-3">Leaderboard</h2>
+        <ul id="leaderboard" class="border-t border-line divide-y divide-line">
+          {% for row in state.leaderboard %}
+          <li class="leaderboard-row flex items-center gap-3 py-3 text-sm {{ 'opacity-50' if row.top_bid is none }}" data-bidder="{{ row.bidder }}">
+            <span class="w-5 font-mono text-xs text-mute tabular-nums" data-rank>{{ row.rank }}</span>
+            <span class="crown text-pastelyellow-text {{ '' if row.rank == 1 and row.top_bid is not none else 'hidden' }}" data-crown aria-hidden="true"></span>
+            <span class="flex-1 truncate">{{ row.bidder }}</span>
+            {% if row.top_bid is none %}
+            <span class="font-mono text-xs text-mute" data-top-bid>waiting to bid</span>
+            {% else %}
+            <span class="font-mono tabular-nums" data-top-bid>{{ '{:,}'.format(row.top_bid) }}</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        <p id="leaderboard-empty" class="py-3 text-sm text-mute {{ '' if not state.leaderboard else 'hidden' }}">No bidders yet</p>
+      </section>
+
+      <section aria-labelledby="chat-heading" class="mt-6 rounded-xl border border-line bg-white p-5">
+        <h2 id="chat-heading" class="text-xs uppercase tracking-widest text-mute font-mono mb-3">Chat</h2>
+        <ul id="chat-list" class="space-y-3 max-h-72 overflow-y-auto pr-1 text-sm" aria-live="polite">
+          {% for msg in state.chat %}
+          <li class="chat-msg" data-bidder="{{ msg.bidder }}">
+            <div class="text-xs text-mute font-mono">{{ msg.bidder }} · {{ msg.created_at[11:19] }}</div>
+            <div class="mt-0.5 break-words">{{ msg.body }}</div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% if joined %}
+        <form id="chat-form" class="mt-3 flex gap-2">
+          <label for="chat-input" class="sr-only">Message</label>
+          <input id="chat-input" name="body" maxlength="500" autocomplete="off" placeholder="Say something"
+                 class="flex-1 h-9 px-3 rounded-md border border-line bg-white text-sm focus:outline-none focus:ring-2 focus:ring-ink/20">
+          <button type="submit"
+                  class="inline-flex items-center rounded-md border border-line px-3 h-9 text-sm hover:bg-white transition">Send</button>
+        </form>
+        {% else %}
+        <p class="mt-3 text-xs text-mute">Join the auction to chat.</p>
+        {% endif %}
+      </section>
+    </div>
+  </aside>
+</div>
+
+<div id="end-overlay" class="hidden fixed inset-0 z-50 bg-bone/95 backdrop-blur-sm overflow-hidden" role="dialog"
+     aria-modal="true" aria-labelledby="end-heading">
+  <canvas id="confetti-canvas" class="pointer-events-none absolute inset-0 w-full h-full"></canvas>
+  <div class="relative h-full flex flex-col items-center justify-center text-center px-6">
+    <span class="text-xs uppercase tracking-[0.2em] text-mute font-mono">Auction ended</span>
+    <h2 id="end-heading" class="font-serif text-4xl md:text-6xl tracking-tight mt-3 flex items-center gap-3">
+      <span class="crown-lg text-pastelyellow-text hidden" data-crown-lg aria-hidden="true"></span>
+      <span id="end-winner">No winner</span>
+    </h2>
+    <div class="mt-4 text-5xl md:text-6xl font-serif tabular-nums" id="end-amount"></div>
+    <div class="mt-2 text-sm text-mute font-mono">Winning bid</div>
+    <div class="mt-8 flex items-center gap-3">
+      <a id="end-results" href="#" class="inline-flex items-center rounded-md bg-ink text-white text-sm font-medium px-4 h-10 hover:bg-[#333333] active:scale-[0.98] transition">View results</a>
+      <button id="end-dismiss" type="button" class="inline-flex items-center rounded-md border border-line px-4 h-10 text-sm hover:bg-white transition">Close</button>
+    </div>
+  </div>
+</div>
 
 <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/motion@11.11.17/dist/motion.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.3/dist/confetti.browser.min.js"></script>
 <script src="{{ url_for('static', filename='js/auction.js') }}"></script>
 {% endblock %}

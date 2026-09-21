@@ -29,9 +29,24 @@ membership, request-id idempotency), write, commit — and only then broadcast.
 ## Running
 
 ```bash
-# 1. PostgreSQL (Docker)
+# 1. PostgreSQL
+
+# Option A: Docker
 docker run -d --name livebid-db -e POSTGRES_PASSWORD=livebid \
   -e POSTGRES_USER=livebid -e POSTGRES_DB=livebid -p 5432:5432 postgres:16-alpine
+
+# Option B: native PostgreSQL installation
+# Install PostgreSQL from https://www.postgresql.org/download/ and run:
+psql -U postgres
+
+CREATE USER livebid WITH PASSWORD 'livebid';
+CREATE DATABASE livebid OWNER livebid;
+CREATE DATABASE livebid_test OWNER livebid;
+\q
+
+# Option C: hosted PostgreSQL
+# Set DATABASE_URL and TEST_DATABASE_URL to connection strings supplied by
+# your provider. The application does not require PostgreSQL to run locally.
 
 # 2. Python deps
 pip install -r requirements.txt
@@ -43,6 +58,15 @@ flask db upgrade
 # 4. Run
 python run.py           # http://localhost:5000
 ```
+
+For native PostgreSQL on Windows, run the commands above in `psql` after
+installing PostgreSQL and adding its `bin` directory to `PATH`. On macOS or
+Linux, PostgreSQL can also be installed through the platform package manager.
+The default local connection is
+`postgresql+psycopg://livebid:livebid@localhost:5432/livebid`; override it
+with `DATABASE_URL` when using different credentials, a different host, or a
+hosted database. Tests use `TEST_DATABASE_URL` and default to the
+`livebid_test` database.
 
 ## Tests
 
