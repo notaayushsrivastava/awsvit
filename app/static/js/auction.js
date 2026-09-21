@@ -34,6 +34,16 @@
   let myRequestId = null;
   let lastSeq = Number(boot.dataset.seq);
 
+  // crypto.randomUUID exists only in secure contexts; fall back for plain
+  // HTTP / LAN access. Not cryptographic — it's just an idempotency key.
+  const uuid = () =>
+    crypto.randomUUID
+      ? crypto.randomUUID()
+      : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+          const r = (Math.random() * 16) | 0;
+          return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
+        });
+
   /* ------------------------------------------------------------ connection */
 
   function setConn(connected, label) {
@@ -258,7 +268,7 @@
     const amount = parseInt($("amount").value, 10);
     if (!Number.isFinite(amount)) return;
     myLastBidAmount = amount;
-    myRequestId = crypto.randomUUID();
+    myRequestId = uuid();
     socket.emit("place_bid", { auction_id: AUCTION_ID, amount, request_id: myRequestId });
   });
 
