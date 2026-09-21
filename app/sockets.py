@@ -20,6 +20,15 @@ def _bidder_id():
     return session.get("bidder_id")
 
 
+def _min_increment(auction_id):
+    from sqlalchemy import select
+    from app.models import Auction
+
+    return db.session.scalar(
+        select(Auction.minimum_increment).where(Auction.id == auction_id)
+    )
+
+
 @socketio.on("join_auction")
 def on_join_auction(data):
     auction_id = data.get("auction_id")
@@ -93,6 +102,7 @@ def on_place_bid(data):
         "bid_amount": bid.amount,
         "current_bid": bid.amount,
         "bidder": bid.bidder.display_name,
+        "minimum_valid_bid": bid.amount + _min_increment(auction_id),
         "sequence": svc.get_state(auction_id, include_bids=False)["sequence"],
     }
     # Committed before this point — safe to broadcast.

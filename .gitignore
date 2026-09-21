@@ -5,3 +5,4 @@ __pycache__/
 server.log
 instance/
 *.log
+.agents/*

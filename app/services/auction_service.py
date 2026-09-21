@@ -161,11 +161,12 @@ def place_bid(auction_id, bidder_id, amount, request_id=None):
                 raise RejectedBid("NOT_A_PARTICIPANT")
 
             now = utcnow()
+            if now >= auction.ends_at:
+                if auction.status == AuctionStatus.LIVE:
+                    _close_locked(auction)
+                raise RejectedBid("AUCTION_ENDED", auction.current_bid)
             if auction.status != AuctionStatus.LIVE:
                 raise RejectedBid("AUCTION_NOT_LIVE", auction.current_bid)
-            if now >= auction.ends_at:
-                _close_locked(auction)
-                raise RejectedBid("AUCTION_ENDED", auction.current_bid)
 
             minimum_valid = auction.current_bid + auction.minimum_increment
             if amount < minimum_valid:
@@ -197,6 +198,19 @@ def place_bid(auction_id, bidder_id, amount, request_id=None):
     except RejectedBid:
         _record_rejection(auction_id, bidder_id, amount, request_id)
         raise
+
+
+def _min_increment(auction_id):
+    from sqlalchemy import select
+    from app.models import Auction
+
+    return db.session.scalar(
+        select(Auction.minimum_increment).where(Auction.id == auction_id)
+    )
+
+
+# alias for HTTP fallback use
+_get_min_increment = _min_increment
 
 
 def close_auction(auction_id):

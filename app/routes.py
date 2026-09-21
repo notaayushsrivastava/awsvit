@@ -14,6 +14,56 @@ def current_bidder():
     return db.session.get(Bidder, bidder_id)
 
 
+@bp.post("/auction/<auction_id>/bid")
+def http_bid(auction_id):
+    """HTTP fallback for bid submission — calls the exact same service as
+    Socket.IO. Returns JSON either way."""
+    bidder = current_bidder()
+    data = request.get_json(silent=True) or request.form
+    try:
+        bid = svc.place_bid(
+            auction_id, bidder.id if bidder else None,
+            int(data.get("amount", 0)),
+            data.get("request_id"),
+        )
+    except svc.RejectedBid as e:
+        return jsonify({
+            "accepted": False,
+            "reason": e.reason,
+            "current_bid": e.current_bid,
+            "minimum_valid_bid": e.minimum_valid_bid,
+        }), 409
+    # committed — now broadcast to socket clients in the room
+    from app.extensions import socketio
+    from app.services.auction_service import get_state
+
+    socketio.emit(
+        "bid_accepted",
+        {
+            "event": "bid_accepted",
+            "request_id": bid.request_id,
+            "auction_id": str(auction_id),
+            "bid_amount": bid.amount,
+            "current_bid": bid.amount,
+            "bidder": bid.bidder.display_name,
+            "minimum_valid_bid": bid.amount + svc._get_min_increment(auction_id),
+            "sequence": get_state(auction_id, include_bids=False)["sequence"],
+        },
+        to=f"auction:{auction_id}",
+    )
+    return jsonify({"accepted": True, "amount": bid.amount})
+
+
+@bp.get("/auction/<auction_id>/results")
+def results(auction_id):
+    try:
+        state = svc.get_state(auction_id, include_bids=False)
+        history = svc.get_bid_history(auction_id)
+    except LookupError:
+        return render_template("auction/missing.html", auction_id=auction_id), 404
+    return render_template("auction/results.html", state=state, history=history)
+
+
 @bp.get("/health")
 def health():
     db.session.execute(db.text("SELECT 1"))
@@ -45,7 +95,9 @@ def auction_page(auction_id):
         state = svc.get_state(auction_id)
     except LookupError:
         return render_template("auction/missing.html", auction_id=auction_id), 404
-    return render_template("auction/live.html", state=state)
+    bidder = current_bidder()
+    joined = bidder is not None and svc.is_participant(auction_id, bidder.id)
+    return render_template("auction/live.html", state=state, joined=joined)
 
 
 @bp.post("/auction/<auction_id>/join")
